@@ -1,9 +1,14 @@
-# Car Inspection & Marketplace Platform: Exact Build Plan
+# CarWorld: Exact Build Plan
 
-**Stack:** React + TypeScript (frontend) · Node.js/NestJS (API) · PostgreSQL (database)
+**Brand (placeholder):** CarWorld. Booking numbers: `CW-YYMM-NNNNN` (example `CW-2611-00001`). Do not reuse Mycarboy's name, logo, images, or copy.
+**Stack:** Vite + React + TypeScript (frontend) · Node.js/NestJS (API) · Prisma · hosted Neon PostgreSQL with PostGIS, citext, pgcrypto (already enabled). `.env` exists at the project root with `DATABASE_URL` (never commit or copy that value).
+**Local constraints:** hosted Neon only (no local DB container). No Redis, no object storage, no CI for now. OTP, rate limits, slot holds, and background jobs use Postgres tables (and in-process timers). OTP codes are hashed in the DB and **logged to the API console** until a real SMS provider is plugged in. Photos/PDFs stay on local disk (or as data URLs in admin-entered VSH) until object storage is added.
+**Maps:** Leaflet + OpenStreetMap / Nominatim (free).
+**Pricing:** per package and vehicle segment; the same price in every district (`package_prices.district_id` stays NULL).
+**VSH:** admin enters records by hand. Do not claim “official” OEM records until a licensed source exists.
 **Goal:** A functional equivalent of mycarboy.in with an entirely new, more attractive UI.
 
-> This plan is based on three screenshots (home, services, booking step 1). Anything not visible in them (pricing, car-detail fields, payment provider, sign-in method, report layout) is marked **[ASSUMED]**. Confirm these against the live site or decide them yourself.
+> This plan is based on three screenshots (home, services, booking step 1). Remaining assumptions (exact report layout, Razorpay as payment, email/password alongside OTP) are marked **[ASSUMED]** where they still apply.
 
 ---
 
@@ -21,7 +26,7 @@
 |---|---|---|---|
 | PDI | Pre-Delivery Inspection | Brand-new car buyers | Live |
 | UCI | Used-Car Inspection ("360° deep-dive") | Used-car buyers | Live |
-| VSH | Vehicle Service History (maintenance, mileage, odometer tampering, official service records) | Used-car buyers | Live |
+| VSH | Vehicle Service History (maintenance, mileage, odometer; admin-entered at first — do not market as official OEM records) | Used-car buyers | Live |
 | SYC | Sell Your Car (professional evaluation, transparent pricing, fair market offer) | Sellers | Live |
 | BUC | Buy Used Car | Buyers | **Coming soon** |
 | B2B | B2B Inspection | Dealers/fleets | **Coming soon** |
@@ -80,13 +85,13 @@ The reference uses a pale mint background with black pill buttons and flat illus
 ## 4. Architecture
 
 ```
-React + TS (Vite)  ──HTTPS──>  NestJS REST API  ──>  PostgreSQL (+ PostGIS)
+Vite + React + TS  ──HTTPS──>  NestJS REST API  ──>  Neon PostgreSQL (+ PostGIS) via Prisma
         │                          │   │
-        │                          │   ├──> Redis (OTP, rate limit, slot locks, queues)
-        │                          │   ├──> S3-compatible storage (photos, PDFs)
-        │                          │   ├──> Razorpay (payments + webhooks)
-        │                          │   ├──> SMS/WhatsApp provider (OTP, notifications)
-        │                          │   └──> Maps (geocoding, autocomplete)
+        │                          │   ├──> Postgres tables (OTP, rate limit, slot holds, job queue)
+        │                          │   ├──> Local disk for photos/PDFs (object storage later)
+        │                          │   ├──> Razorpay (payments + webhooks) [ASSUMED]
+        │                          │   ├──> OTP: hash + console log (SMS/WhatsApp provider later)
+        │                          │   └──> Leaflet + OSM/Nominatim (geocoding, autocomplete)
         └── Inspector PWA (same React app, /inspector routes, offline-capable)
 ```
 
@@ -94,24 +99,25 @@ React + TS (Vite)  ──HTTPS──>  NestJS REST API  ──>  PostgreSQL (+ P
 | Concern | Choice | Reason |
 |---|---|---|
 | Frontend build | Vite + React 18 + TypeScript (strict) | Fast DX |
-| SEO | Pre-render marketing pages (`vite-plugin-ssg` or `react-snap`) + `react-helmet-async`. If SEO for city/service landing pages is critical, use Next.js instead. | SPA alone ranks poorly |
+| SEO | Keep Vite; add `react-helmet-async` and optional pre-render later. Next.js is out. | decided |
 | Routing | React Router v6 | |
 | Server state | TanStack Query | caching, retries |
 | Client state | Zustand (wizard draft, UI) | |
 | Forms | React Hook Form + Zod (schemas shared with backend via a `shared` package) | |
 | UI | Tailwind CSS + Radix UI primitives (shadcn/ui as a base) | accessible, fully restyleable |
 | Animation | Framer Motion | |
-| Maps | Leaflet + OpenStreetMap/Nominatim (free) **or** Google Maps (better autocomplete, paid) | |
+| Maps | Leaflet + OpenStreetMap / Nominatim | free; decided |
 | Charts (admin) | Recharts | |
 | Backend | NestJS + TypeScript | structure, guards, DTO validation |
-| ORM | Prisma (or Drizzle) | typed Postgres access, migrations |
-| DB | PostgreSQL 16 + PostGIS | geo serviceability |
-| Cache/queue | Redis + BullMQ | notifications, PDF jobs |
-| Auth | Phone OTP + email/password; JWT access (15 min) + refresh (httpOnly cookie, rotated) | |
+| ORM | Prisma | decided |
+| DB | Hosted Neon PostgreSQL + PostGIS (citext, pgcrypto already enabled) | geo serviceability; `DATABASE_URL` in `.env` |
+| Cache/queue | Postgres tables now (add a dedicated cache/queue later if needed) | notifications, PDF jobs, slot holds |
+| Auth | Phone OTP + email/password; JWT access (15 min) + refresh (httpOnly cookie, rotated). OTP is hashed and printed in the API console (dev); SMS later. | |
+| Files | Local disk for now; no S3/R2 | skip object storage |
 | PDF | Puppeteer rendering an HTML report template | pixel-consistent with web report |
-| Monitoring | Sentry, pino logs, uptime check | |
-| Deploy | Frontend: Vercel/Netlify/Cloudflare Pages. API: Docker on Render/Railway/AWS. DB: managed Postgres (Neon/Supabase/RDS) | |
-| CI | GitHub Actions: lint, typecheck, test, migrate, deploy | |
+| Monitoring | pino logs for now; Sentry later | |
+| Deploy | Manual for now. Later: frontend on Vercel/Netlify/Cloudflare Pages; API on a Node host; DB is Neon. | skip CI |
+| CI | None for now | skip |
 
 ### Monorepo layout
 ```
@@ -121,7 +127,7 @@ React + TS (Vite)  ──HTTPS──>  NestJS REST API  ──>  PostgreSQL (+ P
 /packages
   /shared         Zod schemas, types, enums, constants
   /ui             (optional) shared components
-/infra            docker-compose (postgres, redis), migration scripts
+/infra            Prisma/SQL migrations and seed scripts (no local DB container)
 ```
 
 ---
@@ -228,16 +234,17 @@ CREATE TABLE packages (                           -- e.g. UCI Basic / Standard /
   is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
-CREATE TABLE package_prices (                     -- price by segment and district [ASSUMED model]
+CREATE TABLE package_prices (                     -- price by package + vehicle segment; same in every district
   id SERIAL PRIMARY KEY,
   package_id INT NOT NULL REFERENCES packages(id),
   segment vehicle_segment NOT NULL,
-  district_id INT REFERENCES districts(id),       -- NULL = default price
+  district_id INT REFERENCES districts(id),       -- always NULL for now (kept for a later district surcharge)
   base_price_paise INT NOT NULL,
   travel_fee_paise INT NOT NULL DEFAULT 0,
   gst_percent NUMERIC(4,2) NOT NULL DEFAULT 18.00,
   valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
-  valid_to DATE
+  valid_to DATE,
+  UNIQUE (package_id, segment)
 );
 
 CREATE TABLE coupons (
@@ -275,7 +282,7 @@ CREATE INDEX ON vehicles (registration_no);
 -- ---------- Bookings ----------
 CREATE TABLE bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  booking_no TEXT UNIQUE NOT NULL,                -- human-friendly e.g. MCB-2411-00123
+  booking_no TEXT UNIQUE NOT NULL,                -- human-friendly e.g. CW-2611-00001 (CW-YYMM-NNNNN)
   user_id UUID REFERENCES users(id),
   service_id INT NOT NULL REFERENCES services(id),
   package_id INT NOT NULL REFERENCES packages(id),
@@ -404,7 +411,7 @@ CREATE TABLE vsh_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID UNIQUE REFERENCES bookings(id),
   registration_no TEXT NOT NULL, vin TEXT,
-  status TEXT NOT NULL DEFAULT 'queued',           -- queued | processing | ready | failed
+  status TEXT NOT NULL DEFAULT 'queued',           -- queued | processing | ready | failed (admin fills records; no external provider yet)
   summary JSONB, report_pdf_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -412,7 +419,7 @@ CREATE TABLE vsh_records (
   id BIGSERIAL PRIMARY KEY,
   request_id UUID NOT NULL REFERENCES vsh_requests(id) ON DELETE CASCADE,
   service_date DATE, odometer_km INT, workshop TEXT,
-  work_done TEXT, cost_paise INT, source TEXT       -- OEM portal / dealer / manual
+  work_done TEXT, cost_paise INT, source TEXT       -- always 'manual' until a licensed provider exists
 );
 
 -- ---------- Sell Your Car (SYC) ----------
@@ -484,16 +491,16 @@ State is saved server-side as a `draft` booking after each step so users can res
 
 | # | Step | Fields | Rules / API |
 |---|---|---|---|
-| 1 | **Location** | district, address text (autocomplete), map pin (lat/lng) | `POST /serviceability/check`, blocks Continue until serviceable; inactive districts show "Notify me when we arrive" |
+| 1 | **Location** | district, address text (Nominatim autocomplete), map pin (Leaflet + OSM, lat/lng) | `POST /serviceability/check`, blocks Continue until serviceable; inactive districts show "Notify me when we arrive" |
 | 2 | **Car details** | make → model → variant (cascading selects), year, fuel, transmission, registration no. (UCI/VSH), expected km, owners | Reg. no. regex `^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$` (normalised uppercase); PDI may skip reg. no. and ask for VIN/dealer name |
-| 3 | **Pricing** | package choice (Basic/Standard/Premium), coupon code | `POST /pricing/quote` returns base + travel + GST - discount; price locked for 15 minutes via `quote_id` |
-| 4 | **Your info** | name, phone (OTP-verified), email, on-site contact (seller/dealer name + phone) | If not logged in: OTP sign-in inline, no separate signup page |
-| 5 | **Date & time** | calendar + slot chips | `GET /slots?district=&date=`; slot reserved (Redis lock 10 min) when selected |
+| 3 | **Pricing** | package choice (Basic/Standard/Premium), coupon code | `POST /pricing/quote` uses package + vehicle segment only (district does not change price); returns base + travel + GST - discount; price locked for 15 minutes via `quote_id` |
+| 4 | **Your info** | name, phone (OTP-verified), email, on-site contact (seller/dealer name + phone) | If not logged in: OTP sign-in inline, no separate signup page. OTP is verified against the hashed code; the plaintext code is logged on the API console until SMS is wired. |
+| 5 | **Date & time** | calendar + slot chips | `GET /slots?district=&date=`; slot reserved (Postgres row + expiry, 10 min) when selected |
 | 6 | **Payment** | summary, Razorpay checkout (UPI/cards/netbanking) | Booking moves `pending_payment → confirmed` only on **verified webhook** |
 
 Service-specific variants: **PDI** (dealer/showroom details, VIN, delivery date), **UCI** (seller details, registration), **VSH** (no address or slot needed; reg. no. + payment only, report delivered digitally), **SYC** (no payment; submit details, evaluation slot, offer follows).
 
-**After payment:** confirmation screen, WhatsApp + SMS + email, calendar `.ics`, auto-assign inspector (nearest available in the district, manual override in admin).
+**After payment:** confirmation screen, email (and later WhatsApp/SMS), calendar `.ics`, auto-assign inspector (nearest available in the district, manual override in admin). Booking number format `CW-YYMM-NNNNN`.
 
 ---
 
@@ -501,7 +508,7 @@ Service-specific variants: **PDI** (dealer/showroom details, VIN, delivery date)
 
 ```
 AUTH
-POST /auth/otp/request            { phone, purpose }
+POST /auth/otp/request            { phone, purpose }   // hash + console log; no SMS yet
 POST /auth/otp/verify             { phone, code }          -> access + refresh
 POST /auth/register               { name, phone, email?, password? }
 POST /auth/login                  { email|phone, password }
@@ -521,7 +528,7 @@ BOOKING
 POST /serviceability/check        { districtId, lat, lng }
 POST /bookings                    (create draft)
 PATCH /bookings/:id/step/:n       (save step)
-POST /pricing/quote               { packageId, segment, districtId, couponCode? }
+POST /pricing/quote               { packageId, segment, couponCode? }  // district ignored for price
 GET  /slots?districtId=&date=
 POST /bookings/:id/slot-hold      { slotStart }
 POST /bookings/:id/pay            -> Razorpay order
@@ -535,6 +542,7 @@ GET  /inspections/:id/pdf
 
 VSH / SYC
 POST /vsh/requests   GET /vsh/requests/:id
+PUT  /admin/vsh/requests/:id/records      (manual entry)
 POST /sell-leads     GET /sell-leads/:id   POST /sell-leads/:id/accept-offer
 
 INSPECTOR
@@ -542,7 +550,7 @@ GET  /inspector/jobs?date=
 POST /inspector/jobs/:id/start
 GET  /inspector/jobs/:id/checklist
 PUT  /inspector/jobs/:id/results      (batch upsert, offline sync)
-POST /inspector/jobs/:id/media/presign
+POST /inspector/jobs/:id/media            (multipart to local disk; no object storage yet)
 POST /inspector/jobs/:id/complete
 
 ADMIN (role-guarded)
@@ -567,7 +575,7 @@ apps/web/src
     sell/         SellYourCar (own mini-wizard)
     vsh/          VehicleHistoryLookup
     inspector/    Jobs, JobDetail, ChecklistRunner (offline PWA)
-    admin/        Dashboard, Bookings, Inspectors, Pricing, Slots, Districts, Checklists, CMS, Users
+    admin/        Dashboard, Bookings, Inspectors, Pricing, Slots, Districts, Checklists, CMS, Users, VshEntry
   features/       booking/ auth/ reports/ catalogue/ (hooks + api + components per feature)
   components/     ui/ (Button, Input, Select, Stepper, Modal, Sheet, Toast, Badge, ScoreRing)
                   layout/ (Navbar, Footer, WhatsAppFab)  map/ (LocationPicker)
@@ -577,32 +585,33 @@ apps/web/src
   styles/         tokens.css, tailwind.css
 ```
 
-**Key components to build first:** `Stepper`, `LocationPicker` (map + autocomplete + serviceability banner), `CarSelector` (cascading selects with search), `SlotPicker`, `PriceSummary` (sticky), `ScoreRing`, `ChecklistSection`, `CarDiagram` (SVG hotspots), `ReportViewer`.
+**Key components to build first:** `Stepper`, `LocationPicker` (Leaflet + Nominatim + serviceability banner), `CarSelector` (cascading selects with search), `SlotPicker`, `PriceSummary` (sticky), `ScoreRing`, `ChecklistSection`, `CarDiagram` (SVG hotspots), `ReportViewer`.
 
 ---
 
 ## 9. Inspector app (PWA)
 - Installable, works offline: results and photos queue in IndexedDB and sync on reconnect
 - One-hand mobile UI: section list with progress ring, tri-state buttons (OK / Minor / Major), camera capture, voice note to text (optional)
+- Photos upload to the API and are stored on local disk (object storage later)
 - Required photos enforced per item (`requires_photo`)
 - "Complete" blocked until all mandatory items are answered
-- On complete: score calculated server-side, PDF job queued, customer notified
+- On complete: score calculated server-side, PDF written to disk, customer notified (email now; SMS later)
 
 **Scoring (starting rule):** `score = 100 - Σ(severity_weight × status_penalty × section_weight)`, with penalties `minor=1, major=3, critical=8`. Grade: A ≥ 85, B ≥ 70, C ≥ 55, D below. Any `critical` on structure/airbag/flood flag caps the grade at C. Tune with real data.
 
 ---
 
 ## 10. Security, quality, compliance
-- OTP: 6 digits, hashed, 5-minute expiry, max 5 attempts, per-phone and per-IP rate limits (Redis)
+- OTP: 6 digits, hashed, 5-minute expiry, max 5 attempts, per-phone and per-IP rate limits (Postgres). In this phase the plaintext code is also logged to the server console so login works without SMS. Never log OTPs once a provider is live.
 - Passwords: argon2id; refresh token rotation with reuse detection
-- All inputs validated with the shared Zod schemas; parameterised queries via ORM
+- All inputs validated with the shared Zod schemas; parameterised queries via Prisma
 - Role guards on every route; row-level ownership checks (customers see only their bookings)
 - Razorpay: verify signature, idempotent webhook handling, never trust the client for payment success
-- Uploads via presigned URLs, MIME and size checks, strip EXIF location from public report images
+- Uploads to local disk: MIME and size checks, strip EXIF location from public report images. Presigned URLs when object storage is added.
 - Privacy policy, terms, refund policy pages; consent checkbox (India DPDP Act); data export and delete on request
 - Accessibility: WCAG AA contrast, keyboard navigable wizard, focus management between steps
-- Testing: Vitest + React Testing Library (units), Playwright (booking E2E), Jest + Supertest (API), a seeded test database in CI
-- Observability: Sentry (web + API), structured logs, DB slow-query log
+- Testing: Vitest + React Testing Library (units), Playwright (booking E2E later), Jest + Supertest (API). No CI pipeline yet.
+- Observability: structured pino logs; Sentry later
 
 ---
 
@@ -610,42 +619,45 @@ apps/web/src
 
 | Week | Deliverable | Done when |
 |---|---|---|
-| 1 | Monorepo, CI, docker-compose (Postgres + Redis), Prisma schema + migrations, seed script (districts, makes/models, services, packages) | `docker compose up` gives a seeded DB; CI green |
-| 2 | Design system: tokens, core UI components, Navbar/Footer/WhatsApp FAB, Storybook (optional) | Components documented and responsive |
-| 3 | Auth (OTP + password), JWT/refresh, `/me`, protected routes | Can sign up, sign in, stay logged in |
-| 4 | Home, Services, ServiceDetail, About, Contact, FAQ (CMS-driven), waitlist for coming-soon services | Lighthouse ≥ 90 on mobile |
-| 5 | Booking wizard steps 1-3 (location + map, car selector, pricing quote) | Serviceability and quote APIs working end to end |
-| 6 | Steps 4-6 (identity, slots with holds, Razorpay + webhook) | Paid booking becomes `confirmed` |
+| 1 | Monorepo, Prisma schema + migrations against Neon, seed script (districts, makes/models, services, packages, segment prices) | `pnpm -F api prisma migrate dev` + seed on Neon; booking numbers `CW-…` |
+| 2 | Design system: tokens, core UI components, Navbar/Footer/WhatsApp FAB, Storybook (optional) | Components documented and responsive; brand string CarWorld |
+| 3 | Auth (OTP console-log + password), JWT/refresh, `/me`, protected routes | Can sign up, sign in, stay logged in using the console OTP |
+| 4 | Home, Services, ServiceDetail, About, Contact, FAQ (CMS-driven), waitlist for coming-soon services | Marketing site usable |
+| 5 | Booking wizard steps 1-3 (Leaflet location, car selector, package+segment quote) | Serviceability and quote APIs working end to end |
+| 6 | Steps 4-6 (identity, slots with holds, Razorpay + webhook) | Paid booking becomes `confirmed` with a `CW-YYMM-NNNNN` number |
 | 7 | Customer dashboard: bookings list/detail, reschedule, cancel, refunds | Full lifecycle visible to user |
-| 8 | Admin panel v1: bookings, assignment, pricing, slots, districts, CMS | Ops can run the business without DB access |
-| 9 | Inspector PWA + checklist engine + media upload | Inspector completes a job offline |
-| 10 | Scoring, report web view, PDF, share links, WhatsApp/SMS/email notifications | Customer receives a report |
-| 11 | VSH flow (provider integration or manual-entry admin tool), Sell Your Car flow | Both services bookable |
-| 12 | QA, E2E tests, load test, security pass, SEO, analytics, production deploy | Launch checklist signed off |
+| 8 | Admin panel v1: bookings, assignment, pricing (segment, not district), slots, districts, CMS, manual VSH entry | Ops can run the business without DB access |
+| 9 | Inspector PWA + checklist engine + local-disk media | Inspector completes a job offline |
+| 10 | Scoring, report web view, PDF on disk, share links, email notifications | Customer receives a report |
+| 11 | VSH customer request + admin fill, Sell Your Car flow | Both services bookable |
+| 12 | Manual QA and a simple production deploy (no CI yet) | Launch checklist signed off |
 
 **Phase 2 (after launch):** Buy Used Car marketplace (listings, filters, enquiries, "inspected" badge), B2B accounts (company onboarding, bulk upload, invoicing), Tamil localisation polish, referral/coupon engine, customer reviews.
 
 ---
 
-## 12. Decisions you need to make
-1. **Pricing model**: flat per package, or by vehicle segment and district (schema supports both)?
-2. **Service history source**: the real VSH needs a licensed data provider or OEM/dealer integrations, or a manual back-office process at first. Don't promise "official records" until one is secured.
-3. **Maps**: Google Maps (best address autocomplete, paid) vs OpenStreetMap (free, weaker search).
-4. **OTP/WhatsApp provider**: MSG91, Twilio, Gupshup, or Meta's WhatsApp Cloud API.
-5. **SEO needs**: Vite with pre-rendering is fine to start; choose Next.js if you want hundreds of city/service landing pages.
-6. **Branding**: choose your own name, logo and copy. Do not reuse Mycarboy's name, logo, images or text.
+## 12. Decisions (locked)
+1. **ORM:** Prisma.
+2. **Frontend:** Vite + React (not Next.js).
+3. **Maps:** Leaflet + OpenStreetMap / Nominatim.
+4. **OTP:** hash in Postgres and log the code in the API console; real SMS later.
+5. **Files / CI:** skip object storage and CI for now.
+6. **Pricing:** per package and vehicle segment; identical in every district.
+7. **VSH:** admin types records in; no licensed data provider yet — copy must not say “official records”.
+8. **Brand:** placeholder name CarWorld. Booking numbers `CW-YYMM-NNNNN` (e.g. `CW-2611-00001`). Original copy/logo/images stay unused.
+
+Still open if needed later: payment-provider confirmation (plan assumes Razorpay), travel-fee amount, heading font (Sora vs Plus Jakarta Sans).
 
 ---
 
 ## 13. First-day commands (reference)
 ```bash
-pnpm dlx create-turbo@latest carinspect          # or plain pnpm workspaces
-cd carinspect
+# repo is already CarWorld; .env with DATABASE_URL is at the project root — do not copy it
+pnpm dlx create-turbo@latest . --skip-install     # or plain pnpm workspaces in this folder
 pnpm create vite apps/web --template react-ts
 pnpm dlx @nestjs/cli new apps/api --package-manager pnpm
-pnpm add -F api prisma @prisma/client zod argon2 bullmq ioredis razorpay
+pnpm add -F api prisma @prisma/client zod argon2 razorpay
 pnpm add -F web react-router-dom @tanstack/react-query zustand react-hook-form zod \
          @hookform/resolvers framer-motion tailwindcss leaflet react-leaflet i18next react-i18next
-docker compose up -d                              # postgres(postgis) + redis
 pnpm -F api prisma migrate dev
 ```
