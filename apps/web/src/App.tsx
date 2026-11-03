@@ -1,11 +1,7 @@
-import { APP_NAME } from '@carworld/shared';
+import { Home } from './pages/Home';
 
 function App() {
-  return (
-    <main>
-      <h1>{APP_NAME}</h1>
-    </main>
-  );
+  return <Home />;
 }
 
 export default App;

@@ -1,23 +1,21 @@
-:root {
-  font-family: Inter, system-ui, sans-serif;
-  color: #1e1b4b;
-  background: #fafaf7;
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: #1e1b4b;
+  --color-accent: #fbbf24;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-surface: #fafaf7;
+  --color-ink: #0b0a1f;
+  --font-heading: Sora, sans-serif;
+  --font-sans: Inter, sans-serif;
+  --radius-card: 1rem;
 }
 
 body {
   margin: 0;
-}
-
-main {
-  min-height: 100svh;
-  display: grid;
-  place-items: center;
-}
-
-h1 {
-  font-family: Sora, sans-serif;
-  font-weight: 600;
-  font-size: 3rem;
-  letter-spacing: -0.04em;
-  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-family: var(--font-sans);
 }

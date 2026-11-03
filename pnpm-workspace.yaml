@@ -4,6 +4,7 @@ packages:
 allowBuilds:
   '@prisma/engines': true
   prisma: true
+  esbuild: true
 permissions:
   dotenv:
     skills: false
