@@ -4,11 +4,12 @@
 **Stack:** Vite + React + TypeScript (frontend) · Node.js/NestJS (API) · Prisma · hosted Neon PostgreSQL with PostGIS, citext, pgcrypto (already enabled). `.env` exists at the project root with `DATABASE_URL` (never commit or copy that value).
 **Local constraints:** hosted Neon only (no local DB container). No Redis, no object storage, no CI for now. OTP, rate limits, slot holds, and background jobs use Postgres tables (and in-process timers). OTP codes are hashed in the DB and **logged to the API console** until a real SMS provider is plugged in. Photos/PDFs stay on local disk (or as data URLs in admin-entered VSH) until object storage is added.
 **Maps:** Leaflet + OpenStreetMap / Nominatim (free).
-**Pricing:** per package and vehicle segment; the same price in every district (`package_prices.district_id` stays NULL).
+**Pricing:** per package and vehicle segment; the same price in every district (`package_prices.district_id` stays NULL). Travel fee is 0 for every district for now.
+**Payments:** Razorpay in **test mode only** for now.
 **VSH:** admin enters records by hand. Do not claim “official” OEM records until a licensed source exists.
 **Goal:** A functional equivalent of mycarboy.in with an entirely new, more attractive UI.
 
-> This plan is based on three screenshots (home, services, booking step 1). Remaining assumptions (exact report layout, Razorpay as payment, email/password alongside OTP) are marked **[ASSUMED]** where they still apply.
+> This plan is based on three screenshots (home, services, booking step 1). Remaining assumptions (exact report layout, email/password alongside OTP) are marked **[ASSUMED]** where they still apply.
 
 ---
 
@@ -65,7 +66,7 @@ The reference uses a pale mint background with black pill buttons and flat illus
 | Success / Warning / Danger | `#22C55E` / `#F59E0B` / `#EF4444` (used for inspection statuses) |
 | Surface | Warm off-white `#FAFAF7`, cards pure white with soft shadow |
 | Dark sections | `#0B0A1F` with subtle gradient mesh |
-| Headings font | **Sora** or **Plus Jakarta Sans** |
+| Headings font | **Sora** |
 | Body font | **Inter** |
 | Radius | 16px cards, 12px inputs, full-round chips |
 | Motion | Framer Motion: scroll reveals, count-up stats, animated score ring |
@@ -89,7 +90,7 @@ Vite + React + TS  ──HTTPS──>  NestJS REST API  ──>  Neon PostgreSQL
         │                          │   │
         │                          │   ├──> Postgres tables (OTP, rate limit, slot holds, job queue)
         │                          │   ├──> Local disk for photos/PDFs (object storage later)
-        │                          │   ├──> Razorpay (payments + webhooks) [ASSUMED]
+        │                          │   ├──> Razorpay (payments + webhooks; test mode for now)
         │                          │   ├──> OTP: hash + console log (SMS/WhatsApp provider later)
         │                          │   └──> Leaflet + OSM/Nominatim (geocoding, autocomplete)
         └── Inspector PWA (same React app, /inspector routes, offline-capable)
@@ -240,7 +241,7 @@ CREATE TABLE package_prices (                     -- price by package + vehicle 
   segment vehicle_segment NOT NULL,
   district_id INT REFERENCES districts(id),       -- always NULL for now (kept for a later district surcharge)
   base_price_paise INT NOT NULL,
-  travel_fee_paise INT NOT NULL DEFAULT 0,
+  travel_fee_paise INT NOT NULL DEFAULT 0,        -- 0 for every district for now
   gst_percent NUMERIC(4,2) NOT NULL DEFAULT 18.00,
   valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
   valid_to DATE,
@@ -493,7 +494,7 @@ State is saved server-side as a `draft` booking after each step so users can res
 |---|---|---|---|
 | 1 | **Location** | district, address text (Nominatim autocomplete), map pin (Leaflet + OSM, lat/lng) | `POST /serviceability/check`, blocks Continue until serviceable; inactive districts show "Notify me when we arrive" |
 | 2 | **Car details** | make → model → variant (cascading selects), year, fuel, transmission, registration no. (UCI/VSH), expected km, owners | Reg. no. regex `^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$` (normalised uppercase); PDI may skip reg. no. and ask for VIN/dealer name |
-| 3 | **Pricing** | package choice (Basic/Standard/Premium), coupon code | `POST /pricing/quote` uses package + vehicle segment only (district does not change price); returns base + travel + GST - discount; price locked for 15 minutes via `quote_id` |
+| 3 | **Pricing** | package choice (Basic/Standard/Premium), coupon code | `POST /pricing/quote` uses package + vehicle segment only (district does not change price); travel fee is **0 for every district for now**; returns base + travel + GST - discount; price locked for 15 minutes via `quote_id` |
 | 4 | **Your info** | name, phone (OTP-verified), email, on-site contact (seller/dealer name + phone) | If not logged in: OTP sign-in inline, no separate signup page. OTP is verified against the hashed code; the plaintext code is logged on the API console until SMS is wired. |
 | 5 | **Date & time** | calendar + slot chips | `GET /slots?district=&date=`; slot reserved (Postgres row + expiry, 10 min) when selected |
 | 6 | **Payment** | summary, Razorpay checkout (UPI/cards/netbanking) | Booking moves `pending_payment → confirmed` only on **verified webhook** |
@@ -624,7 +625,7 @@ apps/web/src
 | 3 | Auth (OTP console-log + password), JWT/refresh, `/me`, protected routes | Can sign up, sign in, stay logged in using the console OTP |
 | 4 | Home, Services, ServiceDetail, About, Contact, FAQ (CMS-driven), waitlist for coming-soon services | Marketing site usable |
 | 5 | Booking wizard steps 1-3 (Leaflet location, car selector, package+segment quote) | Serviceability and quote APIs working end to end |
-| 6 | Steps 4-6 (identity, slots with holds, Razorpay + webhook) | Paid booking becomes `confirmed` with a `CW-YYMM-NNNNN` number |
+| 6 | Steps 4-6 (identity, slots with holds, Razorpay test-mode checkout + webhook) | Paid booking becomes `confirmed` with a `CW-YYMM-NNNNN` number |
 | 7 | Customer dashboard: bookings list/detail, reschedule, cancel, refunds | Full lifecycle visible to user |
 | 8 | Admin panel v1: bookings, assignment, pricing (segment, not district), slots, districts, CMS, manual VSH entry | Ops can run the business without DB access |
 | 9 | Inspector PWA + checklist engine + local-disk media | Inspector completes a job offline |
@@ -642,11 +643,11 @@ apps/web/src
 3. **Maps:** Leaflet + OpenStreetMap / Nominatim.
 4. **OTP:** hash in Postgres and log the code in the API console; real SMS later.
 5. **Files / CI:** skip object storage and CI for now.
-6. **Pricing:** per package and vehicle segment; identical in every district.
+6. **Pricing:** per package and vehicle segment; identical in every district. Travel fee is **0 for every district** for now.
 7. **VSH:** admin types records in; no licensed data provider yet — copy must not say “official records”.
 8. **Brand:** placeholder name CarWorld. Booking numbers `CW-YYMM-NNNNN` (e.g. `CW-2611-00001`). Original copy/logo/images stay unused.
-
-Still open if needed later: payment-provider confirmation (plan assumes Razorpay), travel-fee amount, heading font (Sora vs Plus Jakarta Sans).
+9. **Payments:** Razorpay, **test mode only** for now. Verify signatures and webhooks; never trust the client for payment success.
+10. **Heading font:** Sora (body remains Inter).
 
 ---
 
