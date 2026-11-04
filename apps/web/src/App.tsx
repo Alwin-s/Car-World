@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { About } from './pages/About';
 import { Account } from './pages/Account';
+import { Book } from './pages/Book';
 import { Contact } from './pages/Contact';
 import { Home } from './pages/Home';
 import { Services } from './pages/Services';
@@ -22,6 +23,7 @@ function App() {
             <Route path="/signin" element={<SignIn />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/account" element={<Account />} />
+              <Route path="/book/:serviceCode" element={<Book />} />
             </Route>
           </Route>
         </Routes>

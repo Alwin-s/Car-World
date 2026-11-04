@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 type Service = {
   code: string;
@@ -9,6 +10,7 @@ type Service = {
 };
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const BOOKABLE = new Set(['PDI', 'UCI']);
 
 export function ServiceCards() {
   const [services, setServices] = useState<Service[]>([]);
@@ -62,6 +64,14 @@ export function ServiceCards() {
             <p className="mt-3 text-sm leading-relaxed text-primary/75">
               {service.tagline}
             </p>
+          )}
+          {BOOKABLE.has(service.code) && !service.isComingSoon && (
+            <Link
+              to={`/book/${service.code}`}
+              className="mt-5 inline-block rounded-full bg-accent px-4 py-2 text-sm font-medium text-ink"
+            >
+              Book now
+            </Link>
           )}
         </li>
       ))}

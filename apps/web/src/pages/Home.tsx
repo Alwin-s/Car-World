@@ -17,7 +17,7 @@ export function Home() {
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Link
-            to="/contact"
+            to="/book/UCI"
             className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-ink"
           >
             Book Inspection
