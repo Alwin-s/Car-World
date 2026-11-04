@@ -1,4 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 
 const links = [
   { to: '/', label: 'Home' },
@@ -8,6 +9,8 @@ const links = [
 ];
 
 export function Navbar() {
+  const { user, loading, signOut } = useAuth();
+
   return (
     <header className="border-b border-primary/10 bg-white">
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
@@ -27,12 +30,30 @@ export function Navbar() {
               {link.label}
             </NavLink>
           ))}
-          <Link
-            to="/signin"
-            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-ink"
-          >
-            Sign In
-          </Link>
+          {loading ? null : user ? (
+            <div className="flex items-center gap-4">
+              <Link
+                to="/account"
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                {user.fullName || user.phone}
+              </Link>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="rounded-full border border-primary/20 px-4 py-2 text-sm font-medium text-primary"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/signin"
+              className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-ink"
+            >
+              Sign In
+            </Link>
+          )}
         </div>
       </nav>
     </header>
