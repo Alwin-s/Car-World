@@ -12,7 +12,17 @@ export type AuthedRequest = Request & { userId: string };
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  private readonly jwtSecret: string;
+
+  constructor(private readonly config: ConfigService) {
+    const secret = this.config.get<string>('JWT_SECRET');
+    if (!secret) {
+      throw new Error(
+        'JWT_SECRET is missing. Add JWT_SECRET="long-random-text" to the .env file in the project root.',
+      );
+    }
+    this.jwtSecret = secret;
+  }
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
@@ -21,10 +31,9 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
     try {
-      const payload = verify(
-        header.slice(7),
-        this.config.get<string>('JWT_SECRET') ?? 'carworld-dev-jwt-secret',
-      ) as { sub: string };
+      const payload = verify(header.slice(7), this.jwtSecret) as {
+        sub: string;
+      };
       req.userId = payload.sub;
       return true;
     } catch {

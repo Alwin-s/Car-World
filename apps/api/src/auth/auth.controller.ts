@@ -29,6 +29,22 @@ export class AuthController {
   ) {
     return this.auth.verifyOtp(body.phone, body.code, req, res);
   }
+
+  @Post('refresh')
+  refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.refresh(req, res);
+  }
+
+  @Post('logout')
+  logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.logout(req, res);
+  }
 }
 
 @Controller()
